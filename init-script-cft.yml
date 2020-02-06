@@ -1,0 +1,218 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Persistantly sets the hostname of a RHEL7 EC2 instance on start
+Mappings:
+  RegionMap:
+    us-east-1:
+      '32': ami-6411e20d
+      '64': ami-7a11e213
+    us-west-1:
+      '32': ami-c9c7978c
+      '64': ami-cfc7978a
+    eu-west-1:
+      '32': ami-37c2f643
+      '64': ami-31c2f645
+    ap-southeast-1:
+      '32': ami-66f28c34
+      '64': ami-60f28c32
+    ap-northeast-1:
+      '32': ami-9c03a89d
+      '64': ami-a003a8a1
+      
+Parameters:
+  SSHKey:
+    Description: Select your SSH Keypair
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+    - t1.micro
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - m1.small
+    - m1.medium
+    - m1.large
+    - m1.xlarge
+    - m2.xlarge
+    - m2.2xlarge
+    - m2.4xlarge
+    - m3.medium
+    - m3.large
+    - m3.xlarge
+    - m3.2xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - c1.medium
+    - c1.xlarge
+    - c3.large
+    - c3.xlarge
+    - c3.2xlarge
+    - c3.4xlarge
+    - c3.8xlarge
+    - c4.large
+    - c4.xlarge
+    - c4.2xlarge
+    - c4.4xlarge
+    - c4.8xlarge
+    - g2.2xlarge
+    - g2.8xlarge
+    - r3.large
+    - r3.xlarge
+    - r3.2xlarge
+    - r3.4xlarge
+    - r3.8xlarge
+    - i2.xlarge
+    - i2.2xlarge
+    - i2.4xlarge
+    - i2.8xlarge
+    - d2.xlarge
+    - d2.2xlarge
+    - d2.4xlarge
+    - d2.8xlarge
+    - hi1.4xlarge
+    - hs1.8xlarge
+    - cr1.8xlarge
+    - cc2.8xlarge
+    - cg1.4xlarge
+    Description: Select your Instancetype. Default is m4.xlarge.
+Resources:
+  MyInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          installbackupscripts:
+          - createbackupfiles
+          - runcron
+        createbackupfiles:
+          files:
+            /home/ec2-user/backup-script.sh:
+              content:
+                #!/bin/bash -e
+                backup_bucket_name="test-mumbai-sunil/" 
+
+                backupfile_location="/home/ec2-user/" 
+
+                upload_to_s3_bucket() {
+
+                       aws s3 cp --recursive $backupfile_location s3://$backup_bucket_name
+
+                       echo "Back up done successfully " 
+
+                }
+
+                upload_to_s3_bucket
+              mode: '000777'
+              owner: root
+              group: root
+        runcron:
+          files:
+            /run.sh:
+              content:
+                #!/bin/bash -e
+                crontab -l > /tmp/mycrontab
+
+                echo '0 * * * * a.sh' >> /tmp/mycrontab
+
+                crontab /tmp/mycrontab
+
+              mode: '000777'
+              owner: root
+              group: root
+          commands:
+            'runcronjob':
+               command: './runcron.sh'
+            
+
+    Properties:
+      ImageId: ami-0217a85e28e625474
+      IamInstanceProfile: !Ref IamInstaneProfile
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName:
+        Ref: SSHKey
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+          - ''
+          - - "#!/bin/bash\n"
+            - "# Download wget\n"
+            - 'yum install wget -y
+
+'
+            - "# Download PIP and easy_install\n"
+            - 'curl -o get-pip.py  https://bootstrap.pypa.io/get-pip.py
+
+'
+            - 'curl -o ez_setup.py https://bootstrap.pypa.io/ez_setup.py
+
+'
+            - "# Installing PIP and easy_instal;\n"
+            - 'python get-pip.py
+
+'
+            - 'python ez_setup.py
+
+'
+            - "# Install CloudFormation Helpers\n"
+            - 'easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+
+'
+            - 'cp -f `pip show aws-cfn-bootstrap 2>/dev/null|grep -E ''^Location''
+              |awk -F: ''{print $2}''`/init/redhat/cfn-hup /etc/init.d/
+
+'
+            - 'chmod 755 /etc/init.d/cfn-hup
+
+'
+            - 'chkconfig --add cfn-hup
+
+'
+            - "# Install the files and packages from the metadata\n"
+            - "/opt/aws/bin/cfn-init -v "
+            - "         --stack "
+
+            # - crontab -l > /tmp/backupcron
+            # - echo '* * * * * /home/ec2-user/backup-script.sh' >> /tmp/backupcron
+            # - crontab /tmp/backupcron
+
+            - Ref: AWS::StackName
+            - "         --resource MyInstance "
+            - "         --configsets installbackupscripts "
+            - "         --region "
+            - Ref: AWS::Region
+            - "\n"
+            # - echo "* * * * * ec2-user /home/ec2-user/backup-script.sh --mem-util --swap-util --aggregated --auto-scaling --from-cron" >> /var/spool/cron/ec2-user
+
+  InstanceHostRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Effect: Allow
+      Path: /
+      Policies:
+      - PolicyName: ec2-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: ['s3:*']
+            Resource: '*'
+  IamInstaneProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+          - !Ref InstanceHostRole
+      Path: /
