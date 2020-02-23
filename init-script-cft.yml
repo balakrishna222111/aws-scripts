@@ -90,10 +90,31 @@ Resources:
         configSets:
           installbackupscripts:
           - createbackupfiles
-          - runcron
+          - download
         createbackupfiles:
           files:
             /home/ec2-user/backup-script.sh:
+              content:
+                #!/bin/bash -e
+                backup_bucket_name="test-mumbai-sunil/" 
+
+                backupfile_location="/home/ec2-user/" 
+
+                upload_to_s3_bucket() {
+
+                       aws s3 cp --recursive $backupfile_location s3://$backup_bucket_name
+
+                       echo "Back up done successfully " 
+
+                }
+
+                upload_to_s3_bucket
+              mode: '000777'
+              owner: root
+              group: root
+        download:
+          files:
+            /home/ec2-user/download-script.sh:
               content:
                 #!/bin/bash -e
                 backup_bucket_name="test-mumbai-sunil/" 
