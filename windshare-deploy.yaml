@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: windshare-deployment
+  name: windshare--ui-deployment
 spec:
   replicas: {{ .Values.replicaCount }}
   template:
@@ -14,4 +14,15 @@ spec:
             - name: http
               containerPort: 3000
               protocol: TCP
--------
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: windshare-ui-deployment
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
