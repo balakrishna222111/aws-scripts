@@ -1,0 +1,62 @@
+- name: Generate Build Info
+  id: generate_build_info
+  run: |
+    FileName="$GITHUB_WORKSPACE/buildinfo.json"
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    agentHost=$(hostname)
+    os=$(uname -s)
+
+    # Get Git tag
+    gitTag=$(git describe --tags --abbrev=0 --always)
+
+    # Get Git branch
+    gitBranch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+
+    # Get Git version
+    gitVersion=$(git --version)
+
+    # Get repository name
+    repositoryName=$GITHUB_REPOSITORY
+
+    # Get artifact ID
+    artifactID=$GITHUB_RUN_NUMBER
+
+    # Get job ID
+    jobID=$GITHUB_JOB
+
+    # Create the build info object
+    buildInfo=$(jq -n --arg agentHost "$agentHost" --arg os "$os" --arg gitTag "$gitTag" --arg gitBranch "$gitBranch" --arg gitVersion "$gitVersion" --arg repositoryName "$repositoryName" --arg artifactID "$artifactID" --arg jobID "$jobID" \
+      --arg runID "$GITHUB_RUN_ID" \
+      --arg actor "$GITHUB_ACTOR" \
+      --arg runAttempt "$GITHUB_RUN_ATTEMPT" \
+      --arg repositoryOwner "$GITHUB_REPOSITORY_OWNER" \
+      --arg headRef "$GITHUB_HEAD_REF" \
+      --arg workflow "$GITHUB_WORKFLOW" \
+      --arg ref "$GITHUB_REF" \
+      --arg repositoryID "$GITHUB_REPOSITORY_ID" \
+      --arg workspace "$GITHUB_WORKSPACE" \
+      --arg retentionDays "$GITHUB_RETENTION_DAYS" \
+      --arg imageOS "$ImageOS" \
+      --arg runnerEnvironment "$RUNNER_ENVIRONMENT" \
+      --arg runnerOS "$RUNNER_OS" \
+      --arg runnerWorkspace "$RUNNER_WORKSPACE" \
+      '{ AgentHost: $agentHost, OS: $os, GitTag: $gitTag, GitBranch: $gitBranch, GitVersion: $gitVersion, RepositoryName: $repositoryName, ArtifactID: $artifactID, JobID: $jobID, RunID: $runID, Actor: $actor, RunAttempt: $runAttempt, RepositoryOwner: $repositoryOwner, HeadRef: $headRef, Workflow: $workflow, Ref: $ref, RepositoryID: $repositoryID, Workspace: $workspace, RetentionDays: $retentionDays, ImageOS: $imageOS, RunnerEnvironment: $runnerEnvironment, RunnerOS: $runnerOS, RunnerWorkspace: $runnerWorkspace }')
+
+    # Create the content object
+    content=$(jq -n --arg timestamp "$timestamp" --argjson buildInfo "$buildInfo" '{ Timestamp: $timestamp, BuildInfo: $buildInfo }')
+
+    # Convert the content object to JSON and save it to the file
+    echo "$content" > "$FileName"
+
+    # Display the file content
+    cat "$FileName"
+
+    # Set the output variables for later use
+    BUILD_ARTIFACT_ID="$artifactID"
+    BUILD_JOB_ID="$jobID"
+
+- name: Upload Build Info
+  uses: actions/upload-artifact@v2
+  with:
+    name: buildinfo
+    path: buildinfo.json
